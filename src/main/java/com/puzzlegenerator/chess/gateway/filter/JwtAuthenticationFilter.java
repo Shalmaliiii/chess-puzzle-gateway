@@ -79,7 +79,8 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
     }
 
     private boolean isOpenEndpoint(String path) {
-        return OPEN_ENDPOINTS.stream().anyMatch(path::startsWith);
+        return OPEN_ENDPOINTS.stream()
+                .anyMatch(ep -> path.equals(ep) || path.startsWith(ep + "/"));
     }
 
     private Mono<Void> onError(ServerWebExchange exchange, String message, HttpStatus status) {
