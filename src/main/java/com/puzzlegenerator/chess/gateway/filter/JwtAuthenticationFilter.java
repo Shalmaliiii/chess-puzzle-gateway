@@ -27,14 +27,24 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
     private final JwtUtil jwtUtil;
 
     private static final List<String> OPEN_ENDPOINTS = List.of(
-            "/api/auth/",
+            "/api/auth",
             "/actuator"
+    );
+
+    private static final List<String> INTERNAL_HEADERS = List.of(
+            "X-User-Id",
+            "X-User-Role"
     );
 
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
         ServerHttpRequest request = exchange.getRequest();
         String path = request.getURI().getPath();
+
+        ServerHttpRequest.Builder strippedRequestBuilder = request.mutate();
+        INTERNAL_HEADERS.forEach(header -> strippedRequestBuilder.headers(h -> h.remove(header)));
+        ServerHttpRequest strippedRequest = strippedRequestBuilder.build();
+        exchange = exchange.mutate().request(strippedRequest).build();
 
         if (isOpenEndpoint(path)) {
             return chain.filter(exchange);
@@ -55,7 +65,7 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
         String userId = jwtUtil.extractUserId(token);
         String role = jwtUtil.extractRole(token);
 
-        ServerHttpRequest modifiedRequest = request.mutate()
+        ServerHttpRequest modifiedRequest = exchange.getRequest().mutate()
                 .header("X-User-Id", userId)
                 .header("X-User-Role", role != null ? role : "")
                 .build();
@@ -69,7 +79,8 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
     }
 
     private boolean isOpenEndpoint(String path) {
-        return OPEN_ENDPOINTS.stream().anyMatch(path::startsWith);
+        return OPEN_ENDPOINTS.stream()
+                .anyMatch(ep -> path.equals(ep) || path.startsWith(ep + "/"));
     }
 
     private Mono<Void> onError(ServerWebExchange exchange, String message, HttpStatus status) {
